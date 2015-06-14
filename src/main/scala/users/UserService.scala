@@ -5,13 +5,17 @@ import akka.event.LoggingAdapter
 import spray.http.MediaTypes.{ `text/html` , `application/json`}
 import spray.http.StatusCodes.{Created, OK}
 import spray.httpx.SprayJsonSupport
-import spray.json.DefaultJsonProtocol
+import spray.json
+import spray.json._
 import spray.routing._
+
+import scala.concurrent.Future
+import scala.util.{Failure, Success}
 
 /**
  * An actor that implements functionality of HTTP server. All HTTP requests are delivered to its mailbox
  */
-class UserServiceActor extends Actor with ActorLogging with UserService with FakePersistenceService {
+class UserServiceActor extends Actor with ActorLogging with UserService with SlickPersistenceService {
 
   def userLog = log
 
@@ -24,7 +28,16 @@ class UserServiceActor extends Actor with ActorLogging with UserService with Fak
  * In order to be able to marshal and unmarshal User instances
  */
 object UserJsonProtocol extends DefaultJsonProtocol {
-  implicit val userFormat = jsonFormat(User, "invitee", "email")
+  implicit object UserJsonFormat extends RootJsonFormat[User] {
+    def write(u: User) =
+      JsObject("invitee" -> JsString(u.name), "email" -> JsString(u.email))
+
+    def read(value: JsValue) = value.asJsObject.getFields("invitee", "email") match {
+      case Seq(JsString(name), JsString(email)) =>
+        new User(None, name, email)
+      case _ => json.deserializationError("Color expected")
+    }
+  }
 }
 
 /**
@@ -57,7 +70,7 @@ trait UserService extends HttpService { this: PersistenceService =>
         respondWithMediaType(`application/json`) {
           parameter("name" ? "John Smith") { name => //default name is John Smith
             userLog.info(s"Loading $name")
-            complete {
+            complete{
               List(load(name))
             }
           }

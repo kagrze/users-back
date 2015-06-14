@@ -7,7 +7,7 @@ import org.specs2.mutable.Specification
 import spray.testkit.Specs2RouteTest
 import spray.http.StatusCodes.{Created, OK}
 
-class UserServiceSpec extends Specification with Specs2RouteTest with UserService with FakePersistenceService {
+class UserServiceSpec extends Specification with Specs2RouteTest with UserService with SlickPersistenceService {
   def actorRefFactory = system
   def userLog = Logging(system, "test logger")
 
@@ -18,7 +18,7 @@ class UserServiceSpec extends Specification with Specs2RouteTest with UserServic
       import UserJsonProtocol._
 
       val userName = "John Smith"
-      val testUser = User(userName, "john@smith.mx")
+      val testUser = User(None, userName, "john@smith.mx")
 
       Post("/invitation", testUser) ~> usersRoute ~> check {
         status === Created

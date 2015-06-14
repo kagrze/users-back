@@ -1,7 +1,7 @@
 users
 ===
 
-A simple REST user service written in Scala that demonstrates [spray](http://spray.io).
+A simple REST user service written in Scala that demonstrates [spray](http://spray.io) and [Slick 3](http://slick.typesafe.com/).
 
 It is based on [spray-template](https://github.com/spray/spray-template) and also inspired by [s4](https://github.com/jacobus/s4/).
 

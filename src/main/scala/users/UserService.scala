@@ -1,5 +1,6 @@
 package users
 
+import scala.concurrent.ExecutionContext
 import akka.actor.{ActorLogging, Actor}
 import akka.event.LoggingAdapter
 import spray.http.MediaTypes.{ `text/html` , `application/json`}
@@ -9,16 +10,19 @@ import spray.json
 import spray.json._
 import spray.routing._
 
-import scala.concurrent.Future
-import scala.util.{Failure, Success}
 
 /**
  * An actor that implements functionality of HTTP server. All HTTP requests are delivered to its mailbox
  */
 class UserServiceActor extends Actor with ActorLogging with UserService with SlickPersistenceService {
 
+  // required by UserService
   def userLog = log
 
+  // required by UserService
+  def exeContext = context.dispatcher
+
+  // required by HttpService
   def actorRefFactory = context
 
   def receive = runRoute(usersRoute)
@@ -44,7 +48,11 @@ object UserJsonProtocol extends DefaultJsonProtocol {
  * This trait defines our service behavior independently from the service actor
  */
 trait UserService extends HttpService { this: PersistenceService =>
+  // abstract logger
   def userLog:LoggingAdapter
+
+  // required by onSuccess
+  implicit def exeContext:ExecutionContext
 
   val usersRoute = {
     import SprayJsonSupport.sprayJsonMarshaller
@@ -70,8 +78,8 @@ trait UserService extends HttpService { this: PersistenceService =>
         respondWithMediaType(`application/json`) {
           parameter("name" ? "John Smith") { name => //default name is John Smith
             userLog.info(s"Loading $name")
-            complete{
-              List(load(name))
+            onSuccess(load(name)) { user =>
+              complete(List(user))
             }
           }
         }
@@ -80,8 +88,9 @@ trait UserService extends HttpService { this: PersistenceService =>
         respondWithStatus(Created) {
           entity(as[User]) { user =>
             userLog.info(s"Creating $user")
-            save(user)
-            complete("")
+            onSuccess(save(user)) { _ =>
+              complete("")
+            }
           }
         }
       } ~
@@ -89,8 +98,9 @@ trait UserService extends HttpService { this: PersistenceService =>
         respondWithStatus(OK) {
           parameter("name") { name =>
             userLog.info(s"Removing $name")
-            remove(name)
-            complete("")
+            onSuccess(remove(name)) { _ =>
+              complete("")
+            }
           }
         }
       }

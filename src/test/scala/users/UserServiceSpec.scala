@@ -9,6 +9,7 @@ import spray.http.StatusCodes.{Created, OK}
 
 class UserServiceSpec extends Specification with Specs2RouteTest with UserService with SlickPersistenceService {
   def actorRefFactory = system
+  def exeContext = system.dispatcher
   def userLog = Logging(system, "test logger")
 
   "An user service" should  {

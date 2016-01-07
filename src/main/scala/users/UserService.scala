@@ -1,18 +1,20 @@
 package users
 
-import scala.concurrent.ExecutionContext
-import akka.actor.{ActorLogging, Actor}
+import akka.actor.{Actor, ActorLogging}
 import akka.event.LoggingAdapter
-import spray.http.MediaTypes.{`text/html`, `application/json`}
-import spray.http.StatusCodes.{Created, OK, MethodNotAllowed}
-import spray.http.HttpHeaders.Accept
+import spray.http.HttpHeaders._
+import spray.http.MediaTypes.{`application/json`, `text/html`}
+import spray.http.StatusCodes.{Created, MethodNotAllowed, OK}
+import spray.http.{HttpMethods, HttpOrigin, SomeOrigins}
 import spray.httpx.SprayJsonSupport
 import spray.json._
 import spray.routing._
 
+import scala.concurrent.ExecutionContext
+
 /**
- * An actor that implements functionality of HTTP server. All HTTP requests are delivered to its mailbox
- */
+  * An actor that implements functionality of HTTP server. All HTTP requests are delivered to its mailbox
+  */
 class UserServiceActor extends Actor with ActorLogging with UserService with SlickPersistenceService {
 
   // required by UserService
@@ -28,16 +30,17 @@ class UserServiceActor extends Actor with ActorLogging with UserService with Sli
 }
 
 /**
- * In order to be able to marshal and unmarshal User and Group instances
- */
+  * In order to be able to marshal and unmarshal User and Group instances
+  */
 object UserJsonProtocol extends DefaultJsonProtocol {
   implicit val userFormat = jsonFormat3(User)
   implicit val groupFormat = jsonFormat2(Group)
+  implicit val usersGroupFormat = jsonFormat1(UsersGroup)
 }
 
 /**
- * This trait defines our service behavior independently from the service actor
- */
+  * This trait defines our service behavior independently from the service actor
+  */
 trait UserService extends HttpService {
   this: PersistenceService =>
   // abstract logger
@@ -68,8 +71,7 @@ trait UserService extends HttpService {
   }
 
   val jointRoute = {
-    import SprayJsonSupport.sprayJsonMarshaller
-    import SprayJsonSupport.sprayJsonUnmarshaller
+    import SprayJsonSupport.{sprayJsonMarshaller, sprayJsonUnmarshaller}
     import UserJsonProtocol._
 
     val requestUri = extract(_.request.uri)
@@ -93,117 +95,158 @@ trait UserService extends HttpService {
         }
       }
     } ~
-      pathPrefix(groupsEndpointName) {
-        pathEnd {
-          post {
-            respondWithStatus(Created) {
-              entity(as[Group]) { group =>
-                userLog.debug(s"Creating $group")
-                onSuccess(saveGroup(group)) { group =>
-                  complete(group)
-                }
-              }
-            }
-          } ~
-            get {
-              respondWithMediaType(`application/json`) {
-                userLog.debug(s"Loading all groups")
-                onSuccess(loadGroups()) { groups =>
-                  complete(groups)
-                }
-              }
-            }
-        } ~
-          path(IntNumber) { id =>
-            get {
-              respondWithMediaType(`application/json`) {
-                userLog.debug(s"Loading group $id")
-                onSuccess(loadGroup(id.toInt)) { group =>
-                  complete(group)
-                }
+      respondWithHeaders(
+        `Access-Control-Allow-Origin`(SomeOrigins(List(HttpOrigin("http://localhost:8000")))),
+        `Access-Control-Allow-Headers`(List("Content-Type")),
+        `Access-Control-Allow-Methods`(HttpMethods.GET, HttpMethods.POST, HttpMethods.DELETE)) {
+        pathPrefix(groupsEndpointName) {
+          pathEnd {
+            options {
+              respondWithHeader(
+                Allow(HttpMethods.GET, HttpMethods.POST)) {
+                complete("")
               }
             } ~
-              delete {
-                respondWithStatus(OK) {
-                  userLog.debug(s"Removing group $id")
-                  onSuccess(removeGroup(id.toInt)) { _ =>
-                    complete("")
-                  }
-                }
-              }
-          }
-      } ~
-      pathPrefix(usersEndpointName) {
-        pathEnd {
-          post {
-            respondWithStatus(Created) {
-              entity(as[User]) { user =>
-                userLog.debug(s"Creating $user")
-                onSuccess(saveUser(user)) { user =>
-                  complete(user)
-                }
-              }
-            }
-          } ~
-            get {
-              respondWithMediaType(`application/json`) {
-                userLog.debug(s"Loading all users")
-                onSuccess(loadUsers()) { users =>
-                  complete(users)
-                }
-              }
-            }
-        } ~
-          pathPrefix(IntNumber) { userId =>
-            pathEnd {
-              get {
-                respondWithMediaType(`application/json`) {
-                  userLog.debug(s"Loading user $userId")
-                  onSuccess(loadUser(userId.toInt)) { user =>
-                    complete(user)
+              post {
+                respondWithStatus(Created) {
+                  entity(as[Group]) { group =>
+                    userLog.debug(s"Creating $group")
+                    onSuccess(saveGroup(group)) { group =>
+                      complete(group)
+                    }
                   }
                 }
               } ~
+              get {
+                respondWithMediaType(`application/json`) {
+                  userLog.debug(s"Loading all groups")
+                  onSuccess(loadGroups()) { groups =>
+                    complete(groups)
+                  }
+                }
+              }
+          } ~
+            path(IntNumber) { id =>
+              options {
+                respondWithHeader(
+                  Allow(HttpMethods.GET, HttpMethods.DELETE)) {
+                  complete("")
+                }
+              } ~
+                get {
+                  respondWithMediaType(`application/json`) {
+                    userLog.debug(s"Loading group $id")
+                    onSuccess(loadGroup(id.toInt)) { group =>
+                      complete(group)
+                    }
+                  }
+                } ~
                 delete {
                   respondWithStatus(OK) {
-                    userLog.debug(s"Removing user $userId")
-                    onSuccess(removeUser(userId.toInt)) { _ =>
+                    userLog.debug(s"Removing group $id")
+                    onSuccess(removeGroup(id.toInt)) { _ =>
                       complete("")
                     }
                   }
                 }
-            } ~
-              pathPrefix(groupsEndpointName) {
-                pathEnd {
-                  post {
-                    respondWithStatus(Created) {
-                      entity(as[Group]) { group =>
-                        userLog.debug(s"Adding user $userId to group ${group.id}")
-                        onSuccess(addGroup(userId, group.id.get)) { tmp =>
-                          complete("")
-                        }
+            }
+        } ~
+          pathPrefix(usersEndpointName) {
+            pathEnd {
+              options {
+                respondWithHeader(
+                  Allow(HttpMethods.GET, HttpMethods.POST)) {
+                  complete("")
+                }
+              } ~
+                post {
+                  respondWithStatus(Created) {
+                    entity(as[User]) { user =>
+                      userLog.debug(s"Creating $user")
+                      onSuccess(saveUser(user)) { user =>
+                        complete(user)
                       }
+                    }
+                  }
+                } ~
+                get {
+                  respondWithMediaType(`application/json`) {
+                    userLog.debug(s"Loading all users")
+                    onSuccess(loadUsers()) { users =>
+                      complete(users)
+                    }
+                  }
+                }
+            } ~
+              pathPrefix(IntNumber) { userId =>
+                pathEnd {
+                  options {
+                    respondWithHeader(
+                      Allow(HttpMethods.GET, HttpMethods.DELETE)) {
+                      complete("")
                     }
                   } ~
                     get {
                       respondWithMediaType(`application/json`) {
-                        userLog.debug(s"Loading groups of user $userId")
-                        onSuccess(getUsersGroups(userId)) { groups =>
-                          userLog.debug("completed groups of user")
-                          complete(groups)
+                        userLog.debug(s"Loading user $userId")
+                        onSuccess(loadUser(userId.toInt)) { user =>
+                          complete(user)
                         }
                       }
-                    }
-                } ~
-                  path(IntNumber) { groupId =>
+                    } ~
                     delete {
                       respondWithStatus(OK) {
-                        userLog.debug(s"Removing user $userId from group $groupId")
-                        onSuccess(removeFromGroup(userId, groupId)) { _ =>
+                        userLog.debug(s"Removing user $userId")
+                        onSuccess(removeUser(userId.toInt)) { _ =>
                           complete("")
                         }
                       }
                     }
+                } ~
+                  pathPrefix(groupsEndpointName) {
+                    pathEnd {
+                      options {
+                        respondWithHeader(
+                          Allow(HttpMethods.GET, HttpMethods.POST)) {
+                          complete("")
+                        }
+                      } ~
+                        post {
+                          respondWithStatus(Created) {
+                            entity(as[UsersGroup]) { group =>
+                              userLog.debug(s"Adding user $userId to group ${group.groupId}")
+                              onSuccess(addGroup(userId, group.groupId)) { tmp =>
+                                complete("")
+                              }
+                            }
+                          }
+                        } ~
+                        get {
+                          respondWithMediaType(`application/json`) {
+                            userLog.debug(s"Loading groups of user $userId")
+                            onSuccess(getUsersGroups(userId)) { groups =>
+                              userLog.debug("completed groups of user")
+                              complete(groups)
+                            }
+                          }
+                        }
+                    } ~
+                      path(IntNumber) { groupId =>
+                        options {
+                          respondWithHeader(
+                            Allow(HttpMethods.DELETE)) {
+                            complete("")
+                          }
+                        } ~
+                          delete {
+                            respondWithStatus(OK) {
+                              userLog.debug(s"Removing user $userId from group $groupId")
+                              onSuccess(removeFromGroup(userId, groupId)) { _ =>
+                                complete("")
+                              }
+                            }
+                          }
+                      }
                   }
               }
           }

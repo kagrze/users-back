@@ -118,12 +118,12 @@ class UserServiceSpec extends Specification with Specs2RouteTest with UserServic
 
         val defaultGroupId = 1
 
-        Post(userPath, Group(Some(1), "")) ~> jointRoute ~> check {
+        Post(userPath, UsersGroup(1)) ~> jointRoute ~> check {
           status === Created
         }
 
         Get(userPath) ~> jointRoute ~> check {
-          responseAs[List[Int]] === List(defaultGroupId)
+          responseAs[List[UsersGroup]] === List(UsersGroup(defaultGroupId))
           status === OK
         }
 

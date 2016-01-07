@@ -24,7 +24,7 @@ trait PersistenceService {
 
   def removeUser(id: Int): Future[Unit]
 
-  def getUsersGroups(userId: Int): Future[Seq[Int]]
+  def getUsersGroups(userId: Int): Future[Seq[UsersGroup]]
 
   def addGroup(userId: Int, groupId: Int): Future[Unit]
 
@@ -115,11 +115,11 @@ trait SlickPersistenceService extends PersistenceService {
     .run(users.filter(_.id === id).delete)
     .map(result => userLog.debug(s"Number of records deleted: $result"))
 
-  def getUsersGroups(userId: Int): Future[Seq[Int]] = db
+  def getUsersGroups(userId: Int): Future[Seq[UsersGroup]] = db
     .run(usersGroups.filter(_.userId === userId).result)
     .map(usersGroupsSeq => {
     userLog.debug(s"returning groups for user $userId")
-    usersGroupsSeq.map(ug => ug._2)
+    usersGroupsSeq.map(ug => UsersGroup(ug._2))
   })
 
   def addGroup(userId: Int, groupId: Int) = db

@@ -11,3 +11,5 @@ In addition, a simple unit tests based on [specs2](https://etorreborre.github.io
 
 It is a level two REST service according to [Richardson Maturity Model](http://martinfowler.com/articles/richardsonMaturityModel.html)
 with some [HATEOAS](https://en.wikipedia.org/wiki/HATEOAS) principles (multiple media types for the root resource; list of available resources for the root resource).
+
+The same API is also implemented in Python: [users-back-py](https://github.com/kagrze/users-back-py).
